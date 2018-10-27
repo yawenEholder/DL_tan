@@ -5,7 +5,7 @@ import time
 class LinearRegression(object):
     def __init__(self):
         self.W = 0
-        self.lamda = 1.0
+        self.lamda = 0.0
         
     
     def initialPar(self,shape,method='default'):
@@ -20,19 +20,20 @@ class LinearRegression(object):
             self.W = np.random.rand(shape+1)
         elif method == 'norm':
             self.W = np.random.randn(shape+1)
+        self.W = self.W.reshape((len(self.W),1))
         
-    def getLoss(self,y_pre,y_ground,lamda=1.0,method='squared'):
+    def getLoss(self,y_pre,y_ground,method='squared'):
         '''
         method: the method of get Loss
         '''
-        self.lamda = lamda
+        #self.lamda = lamda
         if method == 'absolute':
             loss = np.sum(np.fabs(y_pre-y_ground)) / y_pre.shape[0]
         elif method == 'squared':
             loss = np.sum(np.square(y_pre-y_ground)) /(2* y_pre.shape[0])
-        sloss = loss + np.sum(np.square(self.W))*lamda/2
+        sloss = loss + np.sum(np.square(self.W))*self.lamda/2
         print('Pure loss: '+str(loss)+'.....Total loss: '+str(sloss))
-        return loss
+        return sloss
         
     def train(self,X_train,y_train):
         pass
@@ -52,7 +53,7 @@ class ClosedFormLinearRegression(LinearRegression):
         print('Training...')
         X_train = np.insert(X_train,0,1,axis=1)
         print(X_train.shape)
-        w_temp = np.dot(np.transpose(X_train),X_train)+self.lamda * np.identity(X_train.shape[1])
+        w_temp = self.lamda * np.identity(X_train.shape[1]) + np.dot(np.transpose(X_train),X_train)
         #w_temp = np.dot(np.transpose(X_train),X_train)
         try:
             w_temp = np.linalg.inv(w_temp)
@@ -69,25 +70,35 @@ class GradientDescentLinearRegression(LinearRegression):
     def __init__(self):
         super(GradientDescentLinearRegression,self).__init__()
     
-    def train(self,X_train,y_train,X_val,y_val,maxLoop=500,epsilon=0.01,learning_rate = 0.1):
-        loss = 10e10
+    def train(self,X_train,y_train,X_val,y_val,filename,maxLoop=5000,epsilon=0.01,rate0 = 0.01):
+        f = open(filename,'w')
         start = time.time()
         print('Training...')
         X_train = np.insert(X_train,0,1,axis=1)
         for i in range(maxLoop):
+            rate = 1/float(i+1)+ rate0
             count = np.random.choice(X_train.shape[0])
+            f.write('\nrandom choice: '+str(count))
             x_sample = X_train[count]
             y_sample = y_train[count]
-            g_temp1 = self.lamda*self.W - np.dot(x_sample.T,y_sample)
-            g_temp2 = np.dot(np.dot(x_sample.T,x_sample),self.W)
-            gradient =  g_temp1 + g_temp2
-            self.W = self.W - learning_rate * gradient
-            #learning_rate = learning_rate / (i+1)
+            x_sample = x_sample.reshape((1,len(x_sample)))
+            y_sample = y_sample.reshape((1,len(y_sample)))
+            f.write('\nX_sample:'+str(x_sample))
+            f.write('\ny_sample:'+str(y_sample))
+            #g_temp1 = self.lamda*self.W - np.dot(x_sample.T,y_sample)
+            #g_temp2 = np.dot(np.dot(x_sample.T,x_sample),self.W)
+            g_temp0 = np.dot(x_sample,self.W) - y_sample
+            g_temp1 = np.dot(x_sample.T,g_temp0)
+            gradient = g_temp1 + self.lamda*self.W
+            self.W = self.W - rate * gradient
+            f.write('gradient: '+str(gradient)+'\nlearning rate:  '+str(rate))
+            
+            
             y_train_pre = np.dot(X_train,self.W)
             y_val_pre = self.predict(X_val)
             y_train_loss = self.getLoss(y_train_pre,y_train)
             y_val_loss = self.getLoss(y_val_pre,y_val)
-            print('epoch '+str(i+1)+'   Training loss:   '+str(y_train_loss)+'  Valing loss:   '+str(y_val_loss))
+            f.write('\nepoch '+str(i+1)+'   Training loss:   '+str(y_train_loss)+'  Valing loss:   '+str(y_val_loss)+'\n\n')
             #if abs(loss - y_train_loss) > epsilon:
             #    loss = y_train_loss
             #else:
@@ -95,3 +106,14 @@ class GradientDescentLinearRegression(LinearRegression):
             #    print("Convergencing...")
             #    break
         print('Training...'+str(time.time()-start)+'s...Successful!!')
+        f.close()
+        
+def main():
+    from sklearn.datasets import load_svmlight_file
+    data = load_svmlight_file("housing_scale.txt")
+    X,y = data[0],data[1]
+    X = X.toarray()
+    y = y.reshape((len(y),1))
+    from sklearn.model_selection import train_test_split
+    X_train,X_val,y_train,y_val = train_test_split(X,y)
+    
